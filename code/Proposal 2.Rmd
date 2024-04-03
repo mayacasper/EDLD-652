@@ -1,0 +1,280 @@
+---
+title: "Final Draft"
+author: "Maya Casper"
+date: "2024-02-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=F, message=F, warning=F, eval =T) 
+```
+
+
+```{r}
+library(pacman)
+p_load(haven, tidyverse, modelsummary, here, ggplot2,dplyr, ggtext)
+medexam<-read.csv(here('final/MedicalExaminerTableau_2020_05_Migrated Data.csv'))
+```
+
+Select out of system type, note, display and number of records 
+```{r}
+medexam<- medexam %>%
+  select(County, Drug.Type,Time.Measure,Count, Time.Period, Rate, Count.rate, Manner)
+
+```
+
+Subsetting to all drugs and statewide data
+```{r}
+overall<- medexam %>%
+  filter(Drug.Type =='All Drugs') %>%
+  filter(County =='OREGON STATEWIDE')
+```
+### Visualization 1 
+Oregon, all drugs, all years, only rate
+```{r}
+overall_rate3<- read.csv(here('final/2019-2023.csv'))
+rate<-medexam %>%
+  filter(County == "OREGON STATEWIDE") %>%
+  filter(Drug.Type =='All Drugs') %>%
+  filter(Time.Measure == 'Year') %>%
+  filter(Count.rate== 'Rate')
+
+
+overall_rate <- rate %>%
+  group_by(Time.Period) %>%
+  summarize(Sum_Rate = sum(Rate))
+
+rate <- rate %>%
+  left_join(overall_rate, by = "Time.Period")
+
+rate$Time.Period <- as.numeric(rate$Time.Period)
+
+### 1st rendition 
+viz1<- overall_rate3 %>% 
+  filter(County == "OREGON STATEWIDE")
+
+ggplot(viz1,
+           aes(x = Time.Period, y = Sum_Rate)) +
+      geom_line(stat = 'identity') + 
+  labs(title = "Drug overdose deaths increasing in Oregon",
+           subtitle = 'Especially since 2019',
+           x     = '',
+           y     = 'Rate per 100,000', 
+           caption = "Source: Oregon Prescribing Data Dashboard") + 
+      theme(plot.title         = element_markdown(margin = margin(b=10),
+                                                  hjust  = 0),
+            plot.subtitle      = element_markdown(margin = margin(b=35),
+                                                  hjust  = 0, size = 8),
+            axis.title.y       = element_markdown(size   = 9, 
+                                                  vjust  = 1.025,
+                                                  angle  = 360, 
+                                                  margin = margin(r = -80,b=-60)),
+            panel.background   = element_blank(),
+            panel.grid.major.y = element_line(color      = "grey80", 
+                                              linewidth  = 0.5, 
+                                              linetype   = "dotted"),
+            axis.line.x        = element_line(colour='black'),
+            axis.text.x        = element_text(margin=margin(t=0)),
+            axis.ticks.x       = element_line(),
+            axis.ticks.y       = element_blank(),
+            axis.ticks.length  = unit(0.25, "cm"),
+            plot.caption       = element_text(hjust = 0.01, 
+                                              size  = 9,
+                                              margin=margin(t=0)), 
+            plot.margin = margin(1, 1,1,1, "cm"))+
+      scale_y_continuous(breaks = seq(0, 50, by= 5),
+                         limits = c(0,50)) +
+      scale_x_continuous(expand = c(0,0),
+                         limits = c(2009,2022))
+
+
+
+
+```
+```
+### Visualization 2 
+Line graph clustered by county
+
+```{r}
+library(dplyr)
+
+
+counties<-medexam %>%
+  filter(Drug.Type =='All Drugs') %>%
+  filter(Time.Measure == 'Year') %>%
+  filter(Count.rate== 'Rate') 
+
+
+counties$Time.Period <- as.numeric(counties$Time.Period)
+
+overall_rate2 <- counties %>%
+  group_by(County, Time.Period) %>% 
+  summarize(Sum_Rate = sum(Rate))
+counties <- counties %>%
+  left_join(overall_rate2, by = "Time.Period")
+
+overall_rate2<- overall_rate2[-287,]
+
+
+
+black<-rep('gray',length(unique(overall_rate3$County)))
+    names(black) <- unique(overall_rate3$County) 
+    black['OREGON STATEWIDE'] <- 'black' 
+  
+```
+
+
+```{r}
+ggplot(overall_rate3,
+           aes(x = Time.Period, y = Sum_Rate, colour = County)) +
+      geom_line(stat = 'identity') + 
+      scale_color_manual(values=black)+
+      labs(title="There are stark difference in overdose death rates among Oregon counties",
+           subtitle = '(*Rates include accidental and suicide overdose deaths*)',
+           x     = '',
+           y     = 'Rate per 100,000 population',
+           caption = "Source: Oregon Prescribing Data Dashboard") +
+  theme(plot.title= element_markdown(margin = margin(b=3),hjust=0, size = 12, face ='bold'),
+  plot.subtitle= element_markdown(margin = margin(b=10),hjust=0, size = 8),
+    panel.background = element_rect(fill='white',colour='white'),
+    axis.ticks= element_blank(),
+    panel.grid.major.y = element_line(color      = "grey80", 
+                                              linewidth  = 0.5, 
+                                              linetype   = "dashed"),
+    plot.caption= element_text(hjust = 0.01,
+                               size = 9,
+                               margin=margin(t=0)),
+    axis.line.x = element_line(color = "black", linewidth = 0.7),
+    axis.ticks.x = element_line(color='black',linewidth = .7), 
+    axis.ticks.length=unit(.35, "cm"), 
+         plot.margin = margin(1, 1,1,1, "cm"),
+         legend.position = 'none', 
+         axis.title.y = element_markdown(size   = 7.5, 
+                                                  vjust  = 1.001,
+                                                  angle  = 360, 
+                                                  margin = margin(r = -80,b=0)),) +
+      scale_y_continuous(breaks = seq(0, 65, by = 5),
+                         limits = c(0,65)) +
+      scale_x_continuous(expand = c(0,0),
+                         limits = c(2009,2022), 
+                         breaks = seq(2010, 2022, by = 2))+ 
+      annotate('text',
+             x        = 2014,
+             y        = 15,
+             hjust    = .1,
+             vjust    = 0,
+             label    = 'Oregon Statewide',
+             size     = 3.5,
+             color    = 'black') 
+
+#time_series
+#install.packages('plotly')
+#library(plotly)
+#ggplotly(time_series)
+
+
+```
+
+
+
+### By counties
+```{r}
+overall_rate3<- read.csv(here('final/2019-2023.csv'))
+
+
+overall_rate4 <- overall_rate3[overall_rate3$County %in% c('GILLIAM', 'LANE', 'MULTNOMAH','BAKER','LINN','KLAMATH'),]
+
+ggplot(overall_rate4,
+           aes(x = Time.Period, y = Sum_Rate)) +
+      geom_line(stat = 'identity') +
+      labs(title="There are stark differences in overdose death rates among Oregon counties",
+           subtitle = '(Rates include accidental and suicide overdose deaths)',
+           x     = '',
+           y     = 'Rate per 100,000',
+           caption = "Source:Oregon Prescribing Data Dashboard") +
+  theme(plot.title= element_markdown(margin = margin(b=5),hjust=0, size = 12, face ='bold'),
+    panel.background = element_rect(fill='white',colour='white'),
+    axis.ticks= element_blank(),
+    panel.grid.major.y = element_line(color      = "grey95", 
+                                              linewidth  = 0.5, 
+                                              linetype   = "dashed"),
+    plot.caption= element_text(hjust = 0.01, 
+                               size = 9,
+                               margin=margin(t=0)),
+    axis.line.x = element_line(color = "black", linewidth = 0.7),
+    axis.ticks.x = element_line(color='black',linewidth = .7), 
+    axis.ticks.length=unit(.35, "cm"), 
+         plot.margin = margin(1, 1,1,1, "cm") ,
+         legend.position = 'none', 
+         axis.text.x = element_text(size = 6),
+         panel.spacing.x = unit(1, "lines"))+
+      scale_y_continuous(breaks = seq(0, 60, by = 5),
+                         limits = c(0,60)) +
+      scale_x_continuous(expand = c(0,0),
+                         limits = c(2009,2022)) + 
+      facet_wrap(. ~ County)
+```
+
+#drug type
+#type<-medexam %>% 
+#  filter(Time.Period=='2019') %>% 
+#  filter(Time.Measure=='Year') %>% 
+#  filter(County=='OREGON STATEWIDE') %>% 
+#  filter(Count.rate =='Count') %>% 
+#  filter(Manner == 'Accident / Undetermined')
+
+
+
+#County 
+
+#highest<-medexam %>% 
+ # filter(Time.Period=='2019') %>% 
+  #filter(Time.Measure=='Year') %>% 
+#  filter(Drug.Type=='All Drugs') %>% 
+#  filter(Count.rate== 'Rate') %>% 
+#  filter(Manner== 'Accident / Undetermined')
+
+
+
+
+
+
+Chloropleth Map
+```{r}
+library(pacman)
+p_load(here, sf, ggplot2, osmdata, tigris, tidyverse, viridis, tidycensus, tmap, elevatr, ggtext)
+```
+
+
+```{r}
+map <- st_read(here('/Users/mayacasper/Desktop/EDLD 652/EDLD/final/counties/counties.shp'))
+
+or <- counties(state='41',year=2022)
+or$NAME <- toupper(or$NAME)
+or <- or %>%
+  rename(County = NAME)
+  
+#Had to change to all caps and rename column 
+
+map <- overall_rate3 %>% 
+  filter(Time.Period == 2022) %>%  
+filter(County != "OREGON STATEWIDE")
+
+map_plot <- left_join(or, map)
+
+
+ ggplot() +
+  geom_sf(data = map_plot, aes(fill = Sum_Rate), color = "black") + 
+     labs(title = 'Multnomah County sees highest rate of overdose deaths in the state in 2022', caption = 'Source: Oregon Prescribing Dashboard', fill = 'Rate per\n 100,000') +
+     theme(plot.title= element_markdown(margin = margin(b=5),hjust=.5, size = 12), 
+ panel.background = element_rect(fill='white',colour='white'),
+    axis.ticks= element_blank(), 
+ axis.text.x = element_blank(), 
+ axis.text.y = element_blank(), 
+ ) +
+  scale_fill_viridis()
+
+```
+
+
+

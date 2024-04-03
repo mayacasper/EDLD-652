@@ -1,0 +1,206 @@
+---
+title: "Lab 1"
+author: "Maya Casper "
+date: "2024/02/16"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Section 1
+
+### Data
+```{r}
+library(pacman)
+p_load(dplyr, tidyverse, tidytext, ggplot2, ggtext, rio, ggimage)
+
+d <- rio::import(here::here("rstats_tweets.rds"),
+                 setclass = "tbl_df") 
+
+words_freq <- d %>%
+  unnest_tokens(word, text) %>%
+  filter(!(word %in% c("rstats" , "t.co", "https", "http", "rt"))) %>%
+  anti_join(stop_words) %>%
+  count(word,sort=TRUE)
+
+words_freq%>% arrange(desc(n))
+
+head(words_freq)
+(twitter <- words_freq[1:15, ])
+#I had to create a smaller vector with the top 15 values as my computer was not able to continuously make graphics with the larger vector. 
+```
+
+
+### Q1. Bar chart
+
+```{r, echo=T,eval=F}
+
+barchart<- ggplot(twitter, aes(x = reorder (word,n, decreasing =FALSE),
+                      y = n)) +
+    geom_bar(stat = "identity",fill='#93b5f2',alpha=0.85) + 
+  coord_flip() + 
+    labs(title = 'Word frequencies in Twitter posts',
+         x     = '',
+         y     = 'Frequency',
+         subtitle = 'Top 15 words',
+         caption = "Source: Data from Mike Kearny, distributed by #titytuesday") +
+  theme(plot.title   = element_markdown(margin = margin(b=5),hjust=-0.01, size =10, face='bold'),
+        plot.subtitle = element_text(size=8),
+          panel.background   = element_rect(fill='white',colour='white'),
+          panel.grid.major.x = element_line(color = "grey80", linewidth = 0.3, linetype = "dashed"),
+          axis.ticks         = element_blank(), 
+          plot.caption       = element_text(hjust = 1.00, 
+                                            size  = 6),
+        axis.text=element_text(size=5.5),
+        axis.title=element_text(size=7))+
+  scale_y_continuous(breaks = seq(0,70000,5000),
+                       expand = c(0,0),
+                       limits = c(0,75000))
+barchart
+
+```
+
+### Q2. Lollipop bar chart
+
+```{r}
+lollipop<- ggplot(twitter, aes(x = reorder (word,n, decreasing =FALSE),
+                      y = n)) +
+                      geom_image(aes(image = 'twitter.png', x=word, y=n+1500), size=0.05, by='width', nudge_y=1)+
+        geom_segment(aes(x    = reorder(word, n, decreasing = FALSE), 
+                     xend = reorder(word, n, decreasing = FALSE), 
+                     y    = 0, 
+                     yend = n), 
+                 colour    = "#93b5f2",
+                 linewidth = 1) + 
+        coord_flip() + 
+    labs(title = 'Word frequencies in Twitter posts',
+         x     = '',
+         y     = 'Frequency',
+         subtitle = 'Top 15 words',
+         caption = "Source: Data from Mike Kearny, distributed by #titytuesday") +
+  theme(plot.title   = element_markdown(margin = margin(b=5),hjust=-0.01, size =10, face='bold'),
+        plot.subtitle = element_text(size=8),
+          panel.background   = element_rect(fill='white',colour='white'),
+          panel.grid.major.x = element_line(color = "grey80", linewidth = 0.3, linetype = "dashed"),
+          axis.ticks         = element_blank(), 
+          plot.caption       = element_text(hjust = 1.00, 
+                                            size  = 6),
+        axis.text=element_text(size=7),
+        axis.title=element_text(size=9), 
+        plot.margin = unit(c(1,1,1,1), 'cm'))+
+  scale_y_continuous(breaks = seq(0,70000,5000),
+                       expand = c(0,0),
+                       limits = c(0,75000))
+lollipop
+```
+
+
+
+## Section 2
+
+### Data
+
+```{r, echo=T,eval=F}
+
+
+```
+
+### Q3. Grouped bar chart
+
+```{r}
+d <- read.csv(here::here('honeyproduction-1.csv'),header=TRUE)
+
+states <- data.frame(state = state.abb, region=state.region)
+
+combined_data <- d %>%
+  left_join(states, by = "state")
+colors <-c('North Central' = '#fee4e2','West' = '#e5efcc','South'= '#ccf2f3', 'Northeast'= '#f4e5ff')
+
+
+dat <- combined_data %>%
+    group_by(region, state) %>%
+    summarise(average_prod = mean(totalprod)) %>%
+    arrange(average_prod, .by_group = TRUE)
+ 
+dat$state <- factor(dat$state, levels = dat$state)
+ 
+groupedbar <- dat %>%
+    mutate(region = fct_reorder(region, average_prod)) %>%
+    ggplot (., aes(x = state, y = average_prod, fill = region))+
+    geom_col() +
+    coord_flip() +
+    labs(x= '',
+      y     = 'Average Honey Production (lbs)',
+         caption = 'Source: Unknown')+
+    theme(panel.background   = element_rect(fill='white',colour='white'),
+          panel.grid.major.x = element_line(color = "grey85", linewidth = 0.5, linetype = "dashed"),
+          axis.ticks         = element_blank(),
+          plot.caption       = element_text(hjust = 1,
+                                            size  = 7),
+          legend.position    = "top",
+          legend.direction   = "horizontal",
+          legend.text        = element_text(size = 6),
+          legend.title       = element_blank(),
+ 
+          legend.background  = element_rect(fill = "white", colour = "white"),
+          legend.key         = element_rect(fill = "white", colour = "white"),
+          legend.justification = 'left',
+          legend.margin = margin(l=-5),
+          axis.text=element_text(size=4),
+        axis.title=element_text(size=6)) +
+      scale_fill_manual(values=colors, name = "Region")
+ 
+groupedbar
+```
+
+
+### Q4. Check colors for colorblindness
+```{r}
+library(colorblindr)
+cvd_grid(groupedbar)
+```
+
+### Q4. Set manual colors to be colorblind friendly
+
+```{r}
+colors_bl <-c('North Central' = '#E69F00','West' ='#56B4E9','South'= '#009E73', 'Northeast'= '#CC79A7')
+
+dat_cb <- combined_data %>%
+    group_by(region, state) %>%
+    summarise(average_prod = mean(totalprod)) %>%
+    arrange(average_prod, .by_group = TRUE)
+ 
+dat_cb$state <- factor(dat_cb$state, levels = dat_cb$state)
+ 
+groupedbar_cb <- dat_cb %>%
+    mutate(region = fct_reorder(region, average_prod)) %>%
+    ggplot (., aes(x = state, y = average_prod, fill = region))+
+    geom_col() +
+    coord_flip() +
+    labs(x= '',
+      y     = 'Average Honey Production (lbs)',
+         caption = 'Source: Unknown')+
+    theme(panel.background   = element_rect(fill='white',colour='white'),
+          panel.grid.major.x = element_line(color = "grey85", linewidth = 0.5, linetype = "dashed"),
+          axis.ticks         = element_blank(),
+          plot.caption       = element_text(hjust = 1,
+                                            size  = 7),
+          legend.position    = "top",
+          legend.direction   = "horizontal",
+          legend.text        = element_text(size = 6),
+          legend.title       = element_blank(),
+ 
+          legend.background  = element_rect(fill = "white", colour = "white"),
+          legend.key         = element_rect(fill = "white", colour = "white"),
+          legend.justification = 'left',
+          legend.margin = margin(l=-5),
+          axis.text=element_text(size=4),
+        axis.title=element_text(size=6)) +
+      scale_fill_manual(values=colors_bl, name = "Region")
+ 
+groupedbar_cb
+
+```
+

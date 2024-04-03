@@ -1,0 +1,793 @@
+---
+title: "Oregon Drug Overdose Dashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    storyboard: true
+---
+
+```{r setup, include=FALSE}
+require(flexdashboard)
+require(ggplot2)
+require(ggExtra)
+require(grid)
+require(tidyverse)
+require(shadowtext)
+require(fmsb)
+require(plotly)
+require(dygraphs)
+require(visNetwork)
+require(psych)
+
+library(pacman)
+p_load(haven, tidyverse, modelsummary, here, ggplot2,dplyr, ggtext, here, sf,  osmdata, tigris, viridis, tidycensus, tmap, elevatr, plotly, flexdashboard, grid, png, ggrepel)
+
+medexam<-read.csv(here('final/MedicalExaminerTableau_2020_05_Migrated Data.csv'))
+
+overall_rate3<- read.csv(here('final/2019-2023.csv'))
+
+map <- st_read(here('/Users/mayacasper/Desktop/EDLD 652/EDLD/final/counties/counties.shp'))
+
+medexam<- medexam %>%
+  select(County, Drug.Type,Time.Measure,Count, Time.Period, Rate, Count.rate, Manner)
+
+overall<- medexam %>%
+  filter(Drug.Type =='All Drugs') %>%
+  filter(County =='OREGON STATEWIDE')
+or <- counties(state='41',year=2022)
+or$NAME <- toupper(or$NAME)
+or <- or %>%
+  rename(County = NAME)
+  
+
+map <- overall_rate3 %>% 
+  filter(Time.Period == 2022) %>%  
+filter(County != "OREGON STATEWIDE")
+
+map_plot <- left_join(or, map)
+
+unique(medexam$Drug.Type)
+
+drugtype <- medexam %>% 
+  filter(Drug.Type %in% c('Cocaine', 'Fentanyl (including analogues)', 'Heroin', 'Methamphetamine', 'Pharmaceutical Opioid')) %>% 
+  filter(County == 'OREGON STATEWIDE') %>% 
+  filter(Time.Measure == 'Year') %>% 
+  filter(Count.rate == 'Count') %>% 
+    filter (Time.Period == '2019')
+
+mycolors<- c('Cocaine' = '#F28E2B', 'Fentanyl (including analogues)' = '#4E79A7', 'Heroin' = '#59A14F', Methamphetamine = '#E15759', 'Pharmaceutical Opioid' = '#FF9DA7') 
+
+
+drugtype_1 <- drugtype%>%
+  group_by(Drug.Type) %>% 
+  summarize(Sum_Count = sum(Count))
+  
+  drugtype_1 <- drugtype_1 %>%
+  mutate(new_column = "2019")
+  
+  viz1<- overall_rate3 %>% 
+  filter(County == "OREGON STATEWIDE")
+  
+  black<-rep('gray',length(unique(overall_rate3$County)))
+    names(black) <- unique(overall_rate3$County) 
+    black['OREGON STATEWIDE'] <- 'black' 
+
+
+
+ 
+```
+
+
+1 
+=======================================
+
+Column {data-width=400}
+----------------------------------------
+### <span style="font-size: 21 px;"> Context </span>
+
+<span style="font-size: 19px;">The current political nature of the drug landscape in Oregon has driven the topic of drug overdose to the front pages of much mass media. My hope in creating this dashboard is to provide a template for an aesthetically pleasing and accurate visualization of drug overdose-related mortality in the state. I developed these visualizations with the layperson in mind, utilizing specific design choices to improve the ease with which graphics could be read and interpreted. <br /><br />
+All data reported on this dashboard was accessed from the Oregon Health Authority's publicly available Oregon Overdose Prevention Dashboard on January 21st, 2024. While hospital and emergency department visit data is available through this source I chose to limit my visualizations to mortality data from the 2009 - 2022 period. The coming pages will describe overdose trends on both a state and county level in hopes of providing viewers with context in hopes of informing decisions through factual data and statistics.
+<br /> <br />
+I want to give special thanks to my colleagues at the University of Oregon and Dr. Cengiz Zopluoglu for their feedback, mentorship and support during this * Error* and *Warning messages:* filled process. </span>
+
+
+### <span style="font-size: 21 px;"> Visual 1 Final Version </span>
+
+```{r}
+counties<-medexam %>%
+  filter(Drug.Type =='All Drugs') %>%
+  filter(Time.Measure == 'Year') %>%
+  filter(Count.rate== 'Rate') 
+
+
+counties$Time.Period <- as.numeric(counties$Time.Period)
+
+overall_rate2 <- counties %>%
+  group_by(County, Time.Period) %>% 
+  summarize(Sum_Rate = sum(Rate))
+counties <- counties %>%
+  left_join(overall_rate2, by = "Time.Period")
+
+overall_rate2<- overall_rate2[-287,]
+
+
+my_color<-rep('gray',length(unique(overall_rate3$County)))
+    names(my_color) <- unique(overall_rate3$County) 
+    my_color['OREGON STATEWIDE'] <- 'black' 
+    my_color['GILLIAM']<- '#FF9DA7'
+    my_color['LANE']<- '#59A14F'
+    my_color['MULTNOMAH']<- '#E15759'
+    my_color['BAKER']<- '#4E79A7'
+    my_color['LINN']<- '#F28E2B'
+    my_color['KLAMATH']<- '#9C755F'
+
+finalviz2<- ggplot(overall_rate3,
+           aes(x = Time.Period, y = Sum_Rate, colour = County)) +
+      geom_line(stat = 'identity') + 
+      scale_color_manual(values=my_color) +
+      labs(title="There are stark difference in overdose death rates <br /> among Oregon counties",
+           subtitle = 'Rates include accidental and suicide overdose deaths',
+           x     = '',
+           y     = 'Rate per 100,000 deaths',
+           caption = "Source: Oregon Overdose Prevention Dashboard") +
+  theme(plot.title= element_markdown(margin = margin(b=3),hjust=0, size = 15, face ='bold'),
+  plot.subtitle= element_markdown(margin = margin(b=30),hjust=0, size = 12, face = 'italic'),
+    panel.background = element_rect(fill='white',colour='white'),
+    axis.ticks= element_blank(),
+    panel.grid.major.y = element_line(color      = "grey80", 
+                                              linewidth  = 0.5, 
+                                              linetype   = "dashed"),
+    plot.caption= element_text(hjust = 0.01,
+                               size = 9,
+                               margin=margin(t=0)),
+    axis.line.x = element_line(color = "black", linewidth = 0.7),
+    axis.ticks.x = element_line(color='black',linewidth = .7), 
+    axis.ticks.length=unit(.35, "cm"), 
+         plot.margin = margin(1, 1,1,1, "cm"),
+         legend.position = 'none', 
+         axis.title.y = element_markdown(size   = 9, 
+                                                  vjust  = 1.05,
+                                                  angle  = 360, 
+                                                  margin = margin(r = -80,b=0)),) +
+      scale_y_continuous(breaks = seq(0, 65, by = 5),
+                         limits = c(0,65)) +
+      scale_x_continuous(expand = c(0,0),
+                         limits = c(2009,2022), 
+                         breaks = seq(2010, 2022, by = 2))+ 
+      annotate('text',
+             x        = 2014,
+             y        = 15,
+             hjust    = .1,
+             vjust    = 0,
+             label    = 'Oregon Statewide',
+             size     = 4,
+             color    = 'black', 
+             fontface = 'bold') 
+             
+ggplotly(finalviz2)
+
+```
+
+
+
+
+
+
+Column {data-width=300}
+----------------------------------------
+
+### <span style="font-size: 21 px;"> Visual 2 Final Version </span>
+
+```{r}
+
+overall_rate4 <- overall_rate3[overall_rate3$County %in% c('GILLIAM', 'LANE', 'MULTNOMAH','BAKER','LINN','KLAMATH'),]
+
+finalviz3 <- ggplot(overall_rate4,
+                    aes(x = Time.Period, y = Sum_Rate)) +
+  geom_line(stat = 'identity', aes(color = County)) +
+  scale_color_manual(values = c('GILLIAM' = '#FF9DA7', 'LANE' = '#59A14F', 'MULTNOMAH' = '#E15759', 'BAKER' = '#4E79A7', 'LINN' = '#F28E2B', 'KLAMATH' = '#9C755F')) +
+  labs(title = "There are stark differences in overdose death rates <br />among Oregon counties",
+       subtitle = 'Rates include accidental and suicide overdose deaths',
+       x = '',
+       y = 'Rate per 100,000 deaths',
+       caption = "Source: Oregon Overdose Prevention Dashboard") +
+  theme(plot.title = element_markdown(margin = margin(b = 3), hjust = 0, size = 12, face = 'bold'),
+        plot.subtitle = element_markdown(margin = margin(b = 30), hjust = 0, size = 12, face = 'italic'),
+        panel.background = element_rect(fill = 'white', colour = 'white'),
+        axis.ticks = element_blank(),
+        panel.grid.major.y = element_line(color = "grey95", linewidth = 0.5, linetype = "dashed"),
+        plot.caption = element_text(hjust = 0.01, size = 9, margin = margin(t = 0)),
+        axis.title.y = element_markdown(size = 9, margin = margin(r = 0, b = 0)),
+        axis.line.x = element_line(color = "black", linewidth = 0.7),
+        axis.ticks.x = element_line(color = 'black', linewidth = .7),
+        axis.ticks.length = unit(.35, "cm"),
+        plot.margin = margin(1, 1, 1, 1, "cm"),
+        legend.position = 'none',
+        axis.text.x = element_text(size = 8),
+        panel.spacing.x = unit(1, "lines")) +
+  scale_y_continuous(breaks = seq(0, 60, by = 5),
+                     limits = c(0, 60)) +
+  scale_x_continuous(expand = c(0, 0),
+                     limits = c(2009, 2022)) +
+  facet_grid(County ~ ., scales = "free_y")
+
+finalviz3
+ggplotly(finalviz3)  
+```
+2 
+=======================================
+
+Column {data-width=400}
+----------------------------------------
+### Visual 3 Final Version 
+
+<span style="font-size: 18px;"> This Chloropleth Map represent the rate of overdose deaths per 100,000 residents in Oregon for the 2022 reporting period. The color shading of each county represents the county overdose rate in comparison to the legend on the right-hand side. The most darkly shaded counties are those with the highest rate. Multnomah, colored in yellow, has the highest rate of overdose death, at around 55 per 100,000. Counties like Sherman and Gilliam have between 0 and 5 per 100,000. </span>
+
+
+
+
+
+
+```{r  fig.width=8, fig.height=6}
+ggplot() +
+  geom_sf(data = map_plot, aes(fill = Sum_Rate), color = "black") + 
+  labs(title = 'Multnomah County sees highest rate of drug overdose  <br /> deaths in the state during 2022', x='', y='', 
+       caption = 'Source: Oregon Overdose Prevention Dashboard', 
+       fill = 'Rate per<br /> 100,000') +
+  theme(plot.title= element_markdown(margin = margin(b=3),hjust=0, size = 15, face ='bold'),
+  plot.subtitle= element_markdown(margin = margin(b=30),hjust=0, size = 12, face = 'italic'), 
+        legend.title= element_markdown(size = 9),
+        panel.background = element_rect(fill = 'white', colour = 'white'),
+        axis.ticks = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank())+ 
+  annotate('text', 
+           y = 45.7, 
+           x = -122.3, 
+           label = 'Multnomah', 
+           size = 2.5) + 
+  annotate('text', 
+           y = 44, 
+           x = -123, 
+           label = 'Lane', 
+           size = 2.5)  + 
+  annotate('text', 
+           y = 43.2, 
+           x = -117.65, 
+           label = 'Malheur', 
+           size = 2.5) +
+             annotate('text', 
+           y = 44.8, 
+           x = -120, 
+           label = 'Wheeler', 
+           size = 2.5) +
+  annotate('text', 
+           y = 45.45, 
+           x = -120.7, 
+           label = 'Sherman', 
+           size = 2.5, 
+           angle = 90) +
+  annotate('text', 
+           y = 45.4, 
+           x = -120.2, 
+           label = 'Gilliam', 
+           size = 2.5, 
+           angle = 90) +
+  scale_fill_gradient(low = "#f4f4f4", high ='#E15759')
+
+```
+
+Column {data-width=300}
+----------------------------------------
+
+### Visual 3 Rendition 2
+
+```{r}
+
+ggplot() +
+  geom_sf(data = map_plot, aes(fill = Sum_Rate), color = "black") + 
+  labs(title = 'Multnomah County sees highest rate of drug overdose  <br /> deaths in the state during 2022', x='', y='', 
+       caption = 'Source: Oregon Overdose Prevention Dashboard', 
+       fill = 'Rate per<br /> 100,000') +
+  theme(plot.title= element_markdown(margin = margin(b=3),hjust=0, size = 12),
+  plot.subtitle= element_markdown(margin = margin(b=30),hjust=0, size = 12, face = 'italic'), 
+        legend.title= element_markdown(size = 10),
+        panel.background = element_rect(fill = 'white', colour = 'white'),
+        axis.ticks = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank())
+```
+
+
+### Visual 3 Rendition 1
+```{r}
+ggplot() +
+  geom_sf(data = map_plot, aes(fill = Sum_Rate), color = "black") + 
+     labs(title = 'Multnomah County sees highest rate of overdose deaths  <br /> in the state in 2022', fill = 'Rate per\n 100,000') +
+     theme(plot.title= element_markdown(margin = margin(b=5),hjust=.5, size = 12), 
+ panel.background = element_rect(fill='white',colour='white'),
+    axis.ticks= element_blank(), 
+ axis.text.x = element_blank(), 
+ axis.text.y = element_blank(), 
+ ) +
+  scale_fill_viridis()
+```
+
+
+
+3 {data-orientation=rows}
+==============================
+
+Row {data-height=400}
+-----------------------------------------
+
+### Visual 4 Final Version
+
+```{r}
+drugtype2 <- medexam %>% 
+  filter(Drug.Type %in% c('Cocaine', 'Fentanyl (including analogues)', 'Heroin', 'Methamphetamine', 'Pharmaceutical Opioid')) %>% 
+  filter(County == 'OREGON STATEWIDE') %>% 
+  filter(Time.Measure == 'Year') %>% 
+  filter(Count.rate == 'Count') %>% 
+    filter (Time.Period == '2018')
+
+
+drugtype_3 <- drugtype2%>%
+  group_by(Drug.Type) %>% 
+  summarize(Sum_Count = sum(Count))
+
+drugtype_3 <- drugtype_3 %>%
+  mutate(new_column = "2018")
+  
+drugtypefinal<- rbind(drugtype_3, drugtype_1)
+
+drugtypefinal$new_column<-as.character(drugtypefinal$new_column)
+  
+drugtypefinal$Sum_Count<-as.numeric(drugtypefinal$Sum_Count)
+
+
+drugtypefinal$label <- ifelse(drugtypefinal$new_column == "2018", 
+                               paste(drugtypefinal$Drug.Type, drugtypefinal$Sum_Count, ""), 
+                               as.character(drugtypefinal$Sum_Count))
+
+# Set linewidth to 0.5 for all rows
+drugtypefinal$Linewidth <- 0.5
+
+# Set linewidth to 1 for rows where new_column is "2018" or "2019"
+drugtypefinal$Linewidth[drugtypefinal$new_column %in% c("2018", "2019")] <- 1
+
+# Remove non-numeric characters from the label column
+drugtypefinal$label <- gsub("[^0-9.]", "", drugtypefinal$label)
+
+# Plotting
+ggplot(drugtypefinal, aes(x = new_column, 
+                          y = Sum_Count, 
+                          group = Drug.Type, 
+                          color = Drug.Type)) +
+  geom_line(size = drugtypefinal$Linewidth) +
+  geom_point(size = 3, position = position_nudge(y = 0.5)) +
+  scale_color_manual(values = mycolors, name = "Drug Type") +
+  labs(title = '**Overdose death counts contributed to <br /> methamphetamine increased more than any other <br />drug type**',
+       x = '',  
+       y = '',  
+       subtitle = 'Nearly a 30% increase from 2018-2019',
+       caption = "Source: Oregon Overdose Prevention Dashboard") +
+  theme(plot.title = element_markdown(margin = margin(b = 10), hjust = 0, size = 15, face = 'bold'),
+        axis.text.x = element_text(size = 9),
+        panel.background = element_rect(fill = 'white', colour = 'white'),
+        axis.ticks = element_blank(),
+        panel.grid.major.y = element_line(color = "grey80", linewidth = 0.5, linetype = "dashed"), 
+        plot.margin = margin(20, 20, 20, 20, "pt"), 
+        legend.title = element_blank(), 
+        legend.text = element_markdown(size = 8), 
+        legend.position = 'top') +
+  geom_text_repel(aes(label = label),
+                  hjust = ifelse(drugtypefinal$new_column == "2018", 1.1, -.9), 
+                  vjust = 0.5,
+                  size = 3.0, 
+                  position = position_nudge(y = 8))+
+  scale_x_discrete(expand = expansion(add = 0.1))
+```
+
+Row {data-height=400}
+-----------------------------------------
+### Visual 4 Rendition 2
+
+```{r eval=TRUE, fig.width=7, fig.height=4}
+ggplot(drugtype_1, aes(x = "", y = Sum_Count, fill = Drug.Type)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar(theta = "y") +
+  labs(title = "<span style='color:#E15759'>Methamphetamine</span> contributed to the highest number of<br /> fatal overdoses in 2019", x ='', y= '',caption = "Source: Oregon Overdose Prevention Dashboard", subtitle= '2019 is the most recently avaliable data')  +
+  scale_fill_manual(values=mycolors, name = "")+ 
+    theme(plot.title= element_markdown(margin = margin(b=3),hjust=0, size = 15, face ='bold'),
+          plot.subtitle= element_markdown(margin = margin(b=30),hjust=0, size = 12, face='italic'),
+        axis.text.y = element_blank(),
+        axis.text.x = element_blank(),
+    panel.background = element_rect(fill='white',colour='white'),
+    axis.ticks= element_blank(),
+    plot.caption= element_text(hjust = 0.01, 
+    size = 9,
+    margin=margin(t=0)))
+  
+```
+
+### Visual 4 Rendition 1
+
+```{r}
+ggplot(drugtype_1, aes(x = "", y = Sum_Count, fill = Drug.Type)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar(theta = "y") +
+  labs(title = "Methamphetamine contributed to the highest number of fatal overdoses <br /> in 2019", x ='')  +
+    theme(plot.title= element_markdown(margin = margin(b=3),hjust=0, size = 12),
+          plot.subtitle= element_markdown(margin = margin(b=30),hjust=0, size = 12, face='italic'),
+        axis.text.y = element_blank(),
+        axis.text.x = element_blank(),
+    panel.background = element_rect(fill='white',colour='white'),
+    axis.ticks= element_blank(),
+    plot.caption= element_text(hjust = 0.01, 
+    size = 9,
+    margin=margin(t=0)))
+```
+
+
+
+
+
+4 {.storyboard}
+==============================
+
+### Visual 5 Final Rendition {data-commentary-width=400}
+
+
+```{r}
+rate<-medexam %>%
+  filter(County == "OREGON STATEWIDE") %>%
+  filter(Drug.Type =='All Drugs') %>%
+  filter(Time.Measure == 'Year') %>%
+  filter(Count.rate== 'Rate')
+
+
+overall_rate <- rate %>%
+  group_by(Time.Period) %>%
+  summarize(Sum_Rate = sum(Rate))
+
+rate <- rate %>%
+  left_join(overall_rate, by = "Time.Period")
+
+rate$Time.Period <- as.numeric(rate$Time.Period)
+
+### 1st rendition 
+viz1<-overall_rate3 %>% 
+  filter(County == "OREGON STATEWIDE")
+
+ggplot(viz1,
+           aes(x = Time.Period, y = Sum_Rate)) +
+      geom_line(stat = 'identity') + 
+  labs(title = "Statewide overdose deaths continue to rise",
+           subtitle = 'Rates double since 2019',
+           x     = '',
+           y     = 'Rate per 100,000 deaths', 
+           caption = "Source: Oregon Overdose Prevention Dashboard") + 
+      theme(plot.title= element_markdown(margin = margin(b=3),hjust=0, size = 15, face ='bold'),
+  plot.subtitle= element_markdown(margin = margin(b=30),hjust=0, size = 12, face='italic'),
+            axis.title.y       = element_markdown(size   = 9, 
+                                                  vjust  = 1.02,
+                                                  angle  = 360, 
+                                                  margin = margin(r = -80,b=-80)),
+            panel.background   = element_blank(),
+            panel.grid.major.y = element_line(color      = "grey80", 
+                                              linewidth  = 0.5, 
+                                              linetype   = "dotted"),
+            axis.line.x        = element_line(colour='black'),
+            axis.text.x        = element_text(margin=margin(t=0)),
+            axis.ticks.x       = element_line(),
+            axis.ticks.y       = element_blank(),
+            axis.ticks.length  = unit(0.25, "cm"),
+            plot.caption       = element_text(hjust = 0.01, 
+                                              size  = 9,
+                                              margin=margin(b=5)), 
+            plot.margin = margin(1, 1,1,1, "cm"))+
+      scale_y_continuous(breaks = seq(0, 50, by= 5),
+                         limits = c(0,55)) +
+      scale_x_continuous(expand = c(0,0),
+                         limits = c(2009,2023))+
+  geom_rect(xmin = 2020.3, xmax = 2022, ymin = 0, ymax = 50, fill = "#E15759", alpha = 0.05)+
+  geom_segment(aes(x = 2021.2, y = 0, xend = 2021.2, yend = 50), linetype = "dashed", color = "black")+
+  annotate('text',
+             x        = 2020.65,
+             y        = 50.5,
+             hjust    = .1,
+             vjust    = 0,
+             label    = 'COVID-19\n Pandemic',
+             size     = 3,
+             color    = 'black')+
+     annotate("segment", x = 2019, y = 10 , xend = 10, yend = 2021,
+              arrow = arrow(type = "closed", length = unit(0.01, "npc")))+
+           annotate("segment", x = 2020, y = 10, xend = 2021.1, yend=10,
+         arrow = arrow(type = "closed", length = unit(0.01, "npc")))+ 
+   annotate('text',
+             x        = 2019,
+             y        = 9.8,
+             vjust    = 0,
+             label    = 'Measure 110 goes\n into effect',
+             size     = 3,
+             color    = 'black')
+ 
+```
+
+****
+
+<span style="font-size: 18px;"> Visualization 5 depicts the statewide change in drug overdose rates in Oregon from 2009 to 2022. Historically the trend line was relatively steady at around 15 per 100,000 until 2019 where we see a continual and steep incline. <br/> <br/> As the labels suggest there are two important events to be considered when interpreting this change over time. First, the Coronavirus (COVID-19) pandemic spanned from March 11th, 2020 to May 11th, 2023, and significantly reduced access to mental health, substance use, and harm reduction services. Secondly, Oregon ballot measure 110 was enacted in November 2020 which decriminalized most unlawful possession of a controlled substance.<br/> <br/> While by no means can we speculate that either of these events directly caused the increase in drug overdose death rates, they do provide important context for the change in drug overdose trends across time.</span>
+
+### Visual 5 Rendition 2 {data-commentary-width=300}
+
+```{r}
+ggplot(viz1,
+           aes(x = Time.Period, y = Sum_Rate)) +
+      geom_line(stat = 'identity') + 
+  labs(title = "Drug overdose deaths increasing in Oregon",
+           subtitle = 'Especially since 2019',
+           x     = '',
+           y     = 'Rate per 100,000', 
+           caption = "Source: Oregon Overdose Prevention Dashboard") + 
+      theme(plot.title         = element_markdown(margin = margin(b=10),
+                                                  hjust  = 0),
+            plot.subtitle      = element_markdown(margin = margin(b=35),
+                                                  hjust  = 0, size = 8),
+            axis.title.y       = element_markdown(size   = 9, 
+                                                  vjust  = 1.025,
+                                                  angle  = 360, 
+                                                  margin = margin(r = -80,b=-60)),
+            panel.background   = element_blank(),
+            panel.grid.major.y = element_line(color      = "grey80", 
+                                              linewidth  = 0.5, 
+                                              linetype   = "dotted"),
+            axis.line.x        = element_line(colour='black'),
+            axis.text.x        = element_text(margin=margin(t=0)),
+            axis.ticks.x       = element_line(),
+            axis.ticks.y       = element_blank(),
+            axis.ticks.length  = unit(0.25, "cm"),
+            plot.caption       = element_text(hjust = 0.01, 
+                                              size  = 9,
+                                              margin=margin(t=0)), 
+            plot.margin = margin(1, 1,1,1, "cm"))+
+      scale_y_continuous(breaks = seq(0, 50, by= 5),
+                         limits = c(0,50)) +
+      scale_x_continuous(expand = c(0,0),
+                         limits = c(2009,2022))
+
+```
+
+
+### Visual 5 Rendition 1
+
+```{r}
+
+ggplot(viz1,
+           aes(x = Time.Period, y = Sum_Rate)) +
+      geom_line(stat = 'identity') + 
+  labs(title = "Drug overdose deaths increasing in Oregon",
+           x     = '',
+           y     = 'Rate per 100,000') + 
+      theme(plot.title         = element_markdown(margin = margin(b=10),
+                                                  hjust  = 0),
+            plot.subtitle      = element_markdown(margin = margin(b=35),
+                                                  hjust  = 0, size = 8),
+            axis.title.y       = element_markdown(size   = 9, 
+                                                  vjust  = 1.025,
+                                                  angle  = 360, 
+                                                  margin = margin(r = -80,b=-60)),
+            panel.background   = element_blank(),
+            panel.grid.major.y = element_line(color      = "black", 
+                                              linewidth  = 0.5, 
+                                              linetype   = "solid"),
+            axis.line.x        = element_line(colour='black'),
+            axis.text.x        = element_text(margin=margin(t=0)),
+            axis.ticks.length  = unit(0.25, "cm"),
+            plot.caption       = element_text(hjust = 0.01, 
+                                              size  = 9,
+                                              margin=margin(t=0)), 
+            plot.margin = margin(1, 1,1,1, "cm"))+
+      scale_y_continuous(breaks = seq(0, 50, by= 5),
+                         limits = c(0,50)) +
+      scale_x_continuous(expand = c(0,0),
+                         limits = c(2009,2022))
+
+
+  
+```
+```
+
+ggplot(viz1,
+           aes(x = Time.Period, y = Sum_Rate)) +
+      geom_line(stat = 'identi
+```
+5 
+==============================
+<span style="font-size: 21 px;">  The creation of these visualizations was a continuous and iterative process. Here lies the grave of the 1st and 2nd renditions of visualizations 1 & 2 and a number of other graphics that did not make the cut.  </span>
+
+Column {style="height:150pc;"}
+-----------------------------------------
+
+
+### Visualization 1 Rendition 2
+
+```{r}
+ggplot(overall_rate3,
+           aes(x = Time.Period, y = Sum_Rate, colour = County)) +
+      geom_line(stat = 'identity') + 
+      scale_color_manual(values=black)+
+      labs(title="There are stark difference in overdose death rates among <br /> Oregon counties",
+           subtitle = '(*Rates include accidental and suicide overdose deaths*)',
+           x     = '',
+           y     = 'Rate per 100,000 population',
+           caption = "Source: Oregon Prescribing Data Dashboard") +
+  theme(plot.title= element_markdown(margin = margin(b=3),hjust=0, size = 12, face ='bold'),
+  plot.subtitle= element_markdown(margin = margin(b=10),hjust=0, size = 8),
+    panel.background = element_rect(fill='white',colour='white'),
+    axis.ticks= element_blank(),
+    panel.grid.major.y = element_line(color      = "grey80", 
+                                              linewidth  = 0.5, 
+                                              linetype   = "dashed"),
+    plot.caption= element_text(hjust = 0.01,
+                               size = 9,
+                               margin=margin(t=0)),
+    axis.line.x = element_line(color = "black", linewidth = 0.7),
+    axis.ticks.x = element_line(color='black',linewidth = .7), 
+    axis.ticks.length=unit(.35, "cm"), 
+         plot.margin = margin(1, 1,1,1, "cm"),
+         legend.position = 'none', 
+         axis.title.y = element_markdown(size   = 7.5, 
+                                                  vjust  = 1.001,
+                                                  angle  = 360, 
+                                                  margin = margin(r = -80,b=0)),) +
+      scale_y_continuous(breaks = seq(0, 65, by = 5),
+                         limits = c(0,65)) +
+      scale_x_continuous(expand = c(0,0),
+                         limits = c(2009,2022), 
+                         breaks = seq(2010, 2022, by = 2))+ 
+      annotate('text',
+             x        = 2014,
+             y        = 15,
+             hjust    = .1,
+             vjust    = 0,
+             label    = 'Oregon Statewide',
+             size     = 3.5,
+             color    = 'black') 
+
+```
+
+### Visualization 1 Rendition 1 
+
+
+```{r}
+ggplot(overall_rate3,
+           aes(x = Time.Period, y = Sum_Rate, colour = County)) +
+      geom_line(stat = 'identity') + 
+      labs(title="There is a variation among overdose death rates among\nOregon counties",
+           x     = '') +
+  theme(axis.line.x = element_line(color = "black", linewidth = 0.7),
+    axis.ticks.x = element_line(color='black',linewidth = .7), 
+    axis.ticks.length=unit(.35, "cm"), 
+         plot.margin = margin(1, 1,1,1, "cm"),
+         legend.position = 'none', 
+         axis.title.y = element_markdown(size   = 7.5, 
+                                                  vjust  = 1.001,
+                                                  angle  = 360, 
+                                                  margin = margin(r = -80,b=0)),) +
+      scale_y_continuous(breaks = seq(0, 65, by = 5),
+                         limits = c(0,65)) +
+      scale_x_continuous(expand = c(0,0),
+                         limits = c(2009,2022), 
+                         breaks = seq(2010, 2022, by = 2))+ 
+      annotate('text',
+             x        = 2014,
+             y        = 15,
+             hjust    = .1,
+             vjust    = 0,
+             label    = 'Oregon Statewide',
+             size     = 3.5,
+             color    = 'black') 
+```
+
+### Visualization 2 Rendition 2
+    
+```{r}
+ggplot(overall_rate4,
+           aes(x = Time.Period, y = Sum_Rate)) +
+      geom_line(stat = 'identity') +
+      labs(title="There are stark differences in overdose death rates among <br /> Oregon counties",
+           subtitle = '(Rates include accidental and suicide overdose deaths)',
+           x     = '',
+           y     = 'Rate per 100,000',
+           caption = "Source:Oregon Prescribing Data Dashboard") +
+  theme(plot.title= element_markdown(margin = margin(b=5),hjust=0, size = 12, face ='bold'),
+    panel.background = element_rect(fill='white',colour='white'),
+    axis.ticks= element_blank(),
+    panel.grid.major.y = element_line(color      = "grey95", 
+                                              linewidth  = 0.5, 
+                                              linetype   = "dashed"),
+    plot.caption= element_text(hjust = 0.01, 
+                               size = 9,
+                               margin=margin(t=0)),
+    axis.line.x = element_line(color = "black", linewidth = 0.7),
+    axis.ticks.x = element_line(color='black',linewidth = .7), 
+    axis.ticks.length=unit(.35, "cm"), 
+         plot.margin = margin(1, 1,1,1, "cm") ,
+         legend.position = 'none', 
+         axis.text.x = element_text(size = 6),
+         panel.spacing.x = unit(1, "lines"))+
+      scale_y_continuous(breaks = seq(0, 60, by = 5),
+                         limits = c(0,60)) +
+      scale_x_continuous(expand = c(0,0),
+                         limits = c(2009,2022)) + 
+      facet_wrap(. ~ County)
+```
+
+Column {style="height:150pc;"}
+-----------------------------------------
+
+### Vizualization 2 Rendition 1
+
+```{r}
+ggplot(overall_rate4,
+           aes(x = Time.Period, y = Sum_Rate)) +
+      geom_line(stat = 'identity') +
+      labs(title="Overdose rate varies between county",
+           x     = '',
+           y     = 'Rate per 100,000') +
+  theme( plot.margin = margin(1, 1,1,1, "cm") ,
+         legend.position = 'none', 
+         axis.text.x = element_text(size = 6),
+         panel.spacing.x = unit(1, "lines"))+
+      scale_y_continuous(breaks = seq(0, 60, by = 5),
+                         limits = c(0,60)) +
+      scale_x_continuous(expand = c(0,0),
+                         limits = c(2009,2022)) + 
+      facet_wrap(. ~ County)
+```
+
+### Unused visual
+
+```{r}
+map_bar<-overall_rate3 %>% 
+  filter(Time.Period == 2022) %>%
+  arrange(desc(Sum_Rate))
+  
+  ggplot(map_bar, aes(x = reorder(County, Sum_Rate, decreasing=TRUE), y = Sum_Rate)) +
+    geom_bar(stat = "identity", fill = '#E15759') + 
+    labs(title = '**Multnomah County sees highest rate of overdose deaths in the state in 2022**',
+         x     = '',
+         y     = '(Rate per 100,000)', 
+         caption = "Source: Oregon Prescribing Data Dashboard") +
+   theme(plot.title= element_markdown(margin = margin(b=20),hjust=0, size = 15, face ='bold'),
+          axis.title.y = element_text(size = 9, vjust = 1, angle = 360, margin = margin(r = -80)), 
+          axis.text.x = element_text(size = 7, angle = 90), 
+              panel.background = element_rect(fill='white',colour='white'),
+    axis.ticks= element_blank(),
+    panel.grid.major.y = element_line(color      = "grey80", 
+                                              linewidth  = 0.5, 
+                                              linetype   = "dashed"), 
+     plot.margin = margin(20, 20, 20, 20, "pt"))
+```
+
+### Unused visual
+
+```{r}
+ggplot(drugtypefinal, aes(x    = Drug.Type, 
+                      y    = Sum_Count,
+                      fill = new_column)) +
+    geom_bar(stat     = "identity",
+             alpha    = 1,
+             position = position_dodge(width = 0.5),
+             width=0.5) +
+    coord_flip()+
+    labs(title = 'Most overdose deaths are related to\nmethamphetamines',
+         x     = '',
+         y     = '') +
+scale_color_manual(values = c("red", "blue"),
+                     name = "New Legend Title") 
+```
+
+
+
+

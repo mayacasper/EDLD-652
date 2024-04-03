@@ -1,0 +1,118 @@
+---
+title: "Lab 3"
+author: "Maya"
+date: "2024-04-03"
+output: 
+word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(pacman)
+p_load(here, sf, ggplot2, osmdata, tigris, tidyverse, viridis, tidycensus, tmap, elevatr, ggtext)
+```
+
+## Section 1
+
+In Section 1, we will create a choropleth map by using color to visualize proportion of night accidents in Oregon counties. To begin, you are required to import and preprocess the data using the following code snippet provided below:
+
+```{r, echo=T,eval=T,comment="",warning=FALSE,message=FALSE}
+
+ota_data<- read.csv("/Users/mayacasper/Desktop/EDLD 652/EDLD/Labs/Lab3/oregon_traffic_accidents.csv")
+
+ota_data$acc <- ifelse(ota_data$Sunrise_Sunset=='Night',1,0)
+
+accident_proportions <- ota_data %>%
+                        group_by(County) %>%
+                        summarise(Total  = n(),
+                                  At_Night  = sum(acc, na.rm = TRUE),
+                                  Proportion= At_Night / Total)
+accident_proportions
+
+#Tigris fipscodes for OR 
+
+or <- counties(state='41',year=2022)
+or <- or %>%
+  rename(County = NAME)
+
+map_plot <- left_join(accident_proportions, or)
+
+```
+
+
+```{r, echo=T,eval=T,comment="",warning=FALSE,message=FALSE}
+ggplot() +
+  geom_sf(data = map_plot, aes(fill = Proportion, geometry = geometry), color = "grey")+ 
+     labs(title = 'Proportion of Accidents During Night (between Sunset and Sunrise) 
+          in Oregon Counties', subtitle = 'Driving during night is most dangerous in Eastern Oregon
+          Baker County has the highest proportion of night accidents', x = '', y = '')+
+  theme(plot.title= element_markdown(margin = margin(b=5),hjust=0, size = 10),
+        plot.subtitle = element_markdown(margin= margin (b= 5), hjust= 0, size= 8),
+ panel.background = element_rect(fill='white',colour='white'),
+    axis.ticks= element_blank(), 
+ axis.text.x = element_blank(), 
+ axis.text.y = element_blank(), legend.position = "top",  # Move legend to bottom
+        legend.box = "horizontal",   # Arrange legend horizontally
+        legend.title = element_text(size = 3),  # Adjust legend title size
+        legend.text = element_text(size = 3))+
+  annotate ( 'text',
+    y = as.numeric(map_plot$INTPTLAT), 
+    x = as.numeric(map_plot$INTPTLON), 
+    label = map_plot$County, 
+    size= 1.5, 
+    color = 'black', 
+    fontface = 'bold')+ 
+  scale_fill_continuous(
+    limits = c (0,0.55), 
+    breaks = c (0, 0.15, 0.30, 0.45), 
+    labels = c('0%', '14%', '30%', '45%'), 
+    name = '', 
+    type = 'viridis')+ 
+  annotate('segment',
+           y = 44.6, 
+           yend = 44.6, 
+           x= -117, 
+           xend= -116.6, 
+           arrow = arrow (length= unit(0.02, 'inches')))+ 
+  annotate('text', 
+           y = 44.6, 
+           x = -116.5, 
+           label = '61.2%', 
+           size = 1)
+
+```
+
+\pagebreak
+
+## Section 2
+```{r, echo=T,eval=F,comment="",warning=FALSE,message=FALSE}
+
+or<- read.csv("/Users/mayacasper/Desktop/EDLD 652/EDLD/Labs/Lab3/oregon_traffic_accidents.csv")
+
+eug   <- subset(or,
+                subset = City == "Eugene")
+
+install.packages('leaflet')
+
+leaflet() %>%
+  addTiles()
+
+eugcity<- osmdata::getbb(place_name = 'Eugene') 
+rowMeans(eugcity)
+
+leaflet() %>%
+  addTiles() %>%  
+  setView(lng =-123.1197, 
+          lat =44.0599,
+          zoom=11.3)%>%
+  addCircles(lng   = eug$Start_Lng,
+             lat   = eug$Start_L, 
+             radius = 45)
+
+```
+
+
+
+
+
